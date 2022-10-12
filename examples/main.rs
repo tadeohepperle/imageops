@@ -1,49 +1,99 @@
-use std::{env, fs, time::Instant};
+use std::{
+    env, fs,
+    time::{Duration, Instant},
+};
 
-use image::{io::Reader as ImageReader, ImageBuffer, Luma};
-use imageops::filters;
+use image::{io::Reader as ImageReader, DynamicImage};
+use imageops::filters::{self, hsv_to_rgb, rgb_to_hsv, HsvImage};
 
 use std::collections::HashMap;
-type ImageOperation =
-    fn(&ImageBuffer<Luma<u8>, Vec<u8>>) -> (ImageBuffer<Luma<u8>, Vec<u8>>, Instant);
+type ImageOperation = fn(&DynamicImage) -> (DynamicImage, Duration);
 
 // cargo run --example main sobel
 // cargo run --example main hist_norm_grey
+// cargo run --example main hist_norm_color
+// cargo run --example main hist_spec_color
+// cargo run --example main to_and_from_hsv
+// cargo run --example main contrast_enhancement
+
 pub fn main() {
+    let rgb: [u8; 3] = [170, 131, 0];
+    println!("Rgb: {:?}", rgb);
+    let hsv = rgb_to_hsv(rgb);
+    println!("Hsv: {:?}", hsv);
+    let rgb = hsv_to_rgb(hsv);
+    println!("Rgb after: {:?}", rgb);
     // load refrence
 
     // define operations
     let mut operations: HashMap<String, ImageOperation> = HashMap::new();
     operations.insert("sobel".to_owned(), |img| {
+        let greyscale_image = img.grayscale().to_luma8();
         let timer = Instant::now();
-        (filters::sobel(img), timer)
+        let sobel_image = filters::sobel(&greyscale_image);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
     operations.insert("sobel_x".to_owned(), |img| {
+        let greyscale_image = img.grayscale().to_luma8();
         let timer = Instant::now();
-        (filters::sobel_x(img), timer)
+        let sobel_image = filters::sobel_x(&greyscale_image);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
     operations.insert("sobel_y".to_owned(), |img| {
+        let greyscale_image = img.grayscale().to_luma8();
         let timer = Instant::now();
-        (filters::sobel_y(img), timer)
+        let sobel_image = filters::sobel_y(&greyscale_image);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
     operations.insert("hist_norm_grey".to_owned(), |img| {
+        let greyscale_image = DynamicImage::ImageLuma8(img.grayscale().to_luma8());
         let timer = Instant::now();
-        (filters::histogram_normalization(img), timer)
+        let hist_image_grey = filters::histogram_normalization(greyscale_image);
+        (hist_image_grey, timer.elapsed())
     });
-    operations.insert("hist_specific_grey".to_owned(), |img| {
+    operations.insert("hist_norm_color".to_owned(), |img| {
+        let rgb_image = DynamicImage::ImageRgb8(img.to_rgb8());
+        let timer = Instant::now();
+        let hist_normalized = filters::histogram_normalization(rgb_image);
+        (hist_normalized, timer.elapsed())
+    });
+    operations.insert("hist_spec_color".to_owned(), |img| {
         let reference_img = ImageReader::open("examples/images/reference.jpg")
             .unwrap()
             .decode()
-            .unwrap()
-            .grayscale()
-            .to_luma8();
-
+            .unwrap();
+        let rgb_img = DynamicImage::ImageRgb8(img.to_rgb8());
         let timer = Instant::now();
-        (
-            filters::histogram_specification(&img, &reference_img),
-            timer,
-        )
+        let hist_normalized = filters::histogram_specification(&rgb_img, &reference_img);
+        (hist_normalized, timer.elapsed())
     });
+    operations.insert("contrast_enhancement".to_owned(), |img| {
+        let rgb_img = DynamicImage::ImageRgb8(img.to_rgb8());
+        let timer = Instant::now();
+        let output = filters::contrast_enhancement(&rgb_img, 3.0);
+        (output, timer.elapsed())
+    });
+    operations.insert("to_and_from_hsv".to_owned(), |img| {
+        let rgb_image = img.to_rgb8();
+        let timer = Instant::now();
+        let hsv: HsvImage = HsvImage::from_rgb(&rgb_image);
+        let rgb_image_2 = hsv.to_rgb();
+        (DynamicImage::ImageRgb8(rgb_image_2), timer.elapsed())
+    });
+    // operations.insert("hist_specific_grey".to_owned(), |img| {
+    //     let reference_img = ImageReader::open("examples/images/reference.jpg")
+    // .unwrap()
+    //         .decode()
+    //         .unwrap()
+    //         .grayscale()
+    //         .to_luma8();
+
+    //     let timer = Instant::now();
+    //     (
+    //         filters::histogram_specification(&img, &reference_img),
+    //         timer,
+    //     )
+    // });
 
     // execution
     let args: Vec<String> = env::args().skip(1).collect();
@@ -66,12 +116,8 @@ pub fn main() {
                     for file_name in file_names {
                         let image_path = format!("examples/images/input/{}", file_name);
 
-                        let img = ImageReader::open(&image_path)
-                            .unwrap()
-                            .decode()
-                            .unwrap()
-                            .grayscale()
-                            .to_luma8();
+                        let img = ImageReader::open(&image_path).unwrap().decode().unwrap();
+                        // greyscale().toi_luma()
                         println!(
                             "Applying {} on {} (width: {}, height: {})",
                             op_string,
@@ -80,9 +126,9 @@ pub fn main() {
                             img.height()
                         );
 
-                        let (output, timer) = image_op(&img);
+                        let (output, duration) = image_op(&img);
 
-                        println!("{:.3?}", timer.elapsed());
+                        println!("{:.3?}", duration);
 
                         output
                             .save(output_image_path(&file_name, op_string))
