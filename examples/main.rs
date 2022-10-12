@@ -13,8 +13,10 @@ type ImageOperation = fn(&DynamicImage) -> (DynamicImage, Duration);
 // cargo run --example main hist_norm_grey
 // cargo run --example main hist_norm_color
 // cargo run --example main hist_spec_color
+// cargo run --example main hist_spec_color2
 // cargo run --example main to_and_from_hsv
-// cargo run --example main contrast_enhancement
+// cargo run --example main contrast_enhancement_05
+// cargo run --example main contrast_enhancement_30
 
 pub fn main() {
     let rgb: [u8; 3] = [170, 131, 0];
@@ -67,7 +69,23 @@ pub fn main() {
         let hist_normalized = filters::histogram_specification(&rgb_img, &reference_img);
         (hist_normalized, timer.elapsed())
     });
-    operations.insert("contrast_enhancement".to_owned(), |img| {
+    operations.insert("hist_spec_color2".to_owned(), |img| {
+        let reference_img = ImageReader::open("examples/images/reference2.jpg")
+            .unwrap()
+            .decode()
+            .unwrap();
+        let rgb_img = DynamicImage::ImageRgb8(img.to_rgb8());
+        let timer = Instant::now();
+        let hist_normalized = filters::histogram_specification(&rgb_img, &reference_img);
+        (hist_normalized, timer.elapsed())
+    });
+    operations.insert("contrast_enhancement_05".to_owned(), |img| {
+        let rgb_img = DynamicImage::ImageRgb8(img.to_rgb8());
+        let timer = Instant::now();
+        let output = filters::contrast_enhancement(&rgb_img, 0.5);
+        (output, timer.elapsed())
+    });
+    operations.insert("contrast_enhancement_30".to_owned(), |img| {
         let rgb_img = DynamicImage::ImageRgb8(img.to_rgb8());
         let timer = Instant::now();
         let output = filters::contrast_enhancement(&rgb_img, 3.0);

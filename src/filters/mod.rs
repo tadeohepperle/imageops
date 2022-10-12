@@ -168,12 +168,15 @@ pub fn apply_mapping_rgb(
     for x in 0..w {
         for y in 0..h {
             let rgb = input.get_pixel(x, y).0;
-            let rgb_mapped = [
-                mapping[rgb[0] as usize],
-                mapping[rgb[1] as usize],
-                mapping[rgb[2] as usize],
-            ];
-            output.put_pixel(x, y, Rgb(rgb_mapped));
+            output.put_pixel(
+                x,
+                y,
+                Rgb([
+                    mapping[rgb[0] as usize],
+                    mapping[rgb[1] as usize],
+                    mapping[rgb[2] as usize],
+                ]),
+            );
         }
     }
     output
@@ -182,7 +185,7 @@ pub fn apply_mapping_rgb(
 fn contrast_enhancement_mapping(factor: f64) -> [u8; 256] {
     let mut mapping: [u8; 256] = [0; 256];
     for i in 0..256 {
-        mapping[i] = ((i as f64 - 127.5) * factor).clamp(0.0, 255.0) as u8
+        mapping[i] = ((i as f64 - 127.5) * factor + 127.5).clamp(0.0, 255.0) as u8
     }
     mapping
 }
