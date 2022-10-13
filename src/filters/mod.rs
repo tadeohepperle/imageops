@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::cmp::{max, min};
 
 use image::{DynamicImage, ImageBuffer, Luma, Rgb};
@@ -144,41 +145,48 @@ pub fn histogram_normalization(input: DynamicImage) -> DynamicImage {
     }
 }
 
-pub fn apply_mapping(
+fn apply_mapping(
     input: &ImageBuffer<Luma<u8>, Vec<u8>>,
     mapping: [u8; 256],
 ) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let (w, h) = input.dimensions();
-    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
-    for x in 0..w {
-        for y in 0..h {
-            let val: u8 = mapping[input.get_pixel(x, y).0[0] as usize];
-            output.put_pixel(x, y, Luma([val]));
-        }
-    }
+    let raw: Vec<u8> = input
+        .clone()
+        .into_raw()
+        .par_iter_mut()
+        .map(|e| mapping[*e as usize])
+        .collect();
+    let output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, raw).unwrap();
     output
 }
+
+// fn apply_mapping_seq(
+//     input: &ImageBuffer<Luma<u8>, Vec<u8>>,
+//     mapping: [u8; 256],
+// ) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+//     let (w, h) = input.dimensions();
+//     let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+//     for x in 0..w {
+//         for y in 0..h {
+//             let val: u8 = mapping[input.get_pixel(x, y).0[0] as usize];
+//             output.put_pixel(x, y, Luma([val]));
+//         }
+//     }
+//     output
+// }
 
 pub fn apply_mapping_rgb(
     input: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     mapping: [u8; 256],
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let (w, h) = input.dimensions();
-    let mut output: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(w, h);
-    for x in 0..w {
-        for y in 0..h {
-            let rgb = input.get_pixel(x, y).0;
-            output.put_pixel(
-                x,
-                y,
-                Rgb([
-                    mapping[rgb[0] as usize],
-                    mapping[rgb[1] as usize],
-                    mapping[rgb[2] as usize],
-                ]),
-            );
-        }
-    }
+    let raw: Vec<u8> = input
+        .clone()
+        .into_raw()
+        .par_iter_mut()
+        .map(|e| mapping[*e as usize])
+        .collect();
+    let output: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, raw).unwrap();
     output
 }
 
@@ -288,7 +296,10 @@ impl HsvImage {
 }
 
 #[derive(Debug)]
+
 pub struct Hsv(u16, f64, u8);
+
+#[inline]
 pub fn rgb_to_hsv(rgb: [u8; 3]) -> Hsv {
     // let oneby255: f64 = 1 / 255;
     let r = rgb[0];
@@ -316,6 +327,7 @@ pub fn rgb_to_hsv(rgb: [u8; 3]) -> Hsv {
     Hsv(hue, sat, value)
 }
 
+#[inline]
 pub fn hsv_to_rgb(hsv: Hsv) -> [u8; 3] {
     let Hsv(h, s, v) = hsv;
     let c = v as f64 * s;
