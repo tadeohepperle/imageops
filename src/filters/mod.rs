@@ -346,3 +346,120 @@ pub fn hsv_to_rgb(hsv: Hsv) -> [u8; 3] {
     };
     [rgb[0] + m, rgb[1] + m, rgb[2] + m]
 }
+
+pub fn gaussian_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let conv = conv_3x3_int(&img, [[1, 2, 1], [2, 4, 2], [1, 2, 1]], 16);
+    let raw: Vec<u8> = conv.into_raw().par_iter().map(|e| *e as u8).collect();
+    ImageBuffer::from_raw(w, h, raw).unwrap()
+}
+
+pub fn median_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+
+    for x in 1..(w - 1) {
+        for y in 1..(h - 1) {
+            let mut pixels: [u8; 9] = [
+                img.get_pixel(x - 1, y - 1).0[0],
+                img.get_pixel(x - 1, y).0[0],
+                img.get_pixel(x - 1, y + 1).0[0],
+                img.get_pixel(x, y - 1).0[0],
+                img.get_pixel(x, y).0[0],
+                img.get_pixel(x, y + 1).0[0],
+                img.get_pixel(x + 1, y - 1).0[0],
+                img.get_pixel(x + 1, y).0[0],
+                img.get_pixel(x + 1, y + 1).0[0],
+            ];
+            pixels.sort();
+            output.put_pixel(x, y, Luma([pixels[4]]));
+        }
+    }
+    output
+}
+
+fn conv_3x3_int(
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    kernel: [[i16; 3]; 3],
+    divider: i16,
+) -> ImageBuffer<Luma<i16>, Vec<i16>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<i16>, Vec<i16>> = ImageBuffer::new(w, h);
+
+    for x in 1..(w - 1) {
+        for y in 1..(h - 1) {
+            let val = (img.get_pixel(x - 1, y - 1).0[0] as i16 * kernel[0][0]
+                + img.get_pixel(x - 1, y).0[0] as i16 * kernel[1][0]
+                + img.get_pixel(x - 1, y + 1).0[0] as i16 * kernel[2][0]
+                + img.get_pixel(x, y - 1).0[0] as i16 * kernel[0][1]
+                + img.get_pixel(x, y).0[0] as i16 * kernel[1][1]
+                + img.get_pixel(x, y + 1).0[0] as i16 * kernel[2][1]
+                + img.get_pixel(x + 1, y - 1).0[0] as i16 * kernel[0][2]
+                + img.get_pixel(x + 1, y).0[0] as i16 * kernel[1][2]
+                + img.get_pixel(x + 1, y + 1).0[0] as i16 * kernel[2][2])
+                / divider;
+            output.put_pixel(x, y, Luma([val]));
+        }
+    }
+    output
+}
+
+pub fn average_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let conv = conv_3x3_int(&img, [[1, 1, 1], [1, 1, 1], [1, 1, 1]], 9);
+    let raw: Vec<u8> = conv.into_raw().par_iter().map(|e| *e as u8).collect();
+    ImageBuffer::from_raw(w, h, raw).unwrap()
+}
+
+// 1 2 1 2 3 2 1 2 1
+pub fn weighted_median_smoothing(
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+
+    for x in 1..(w - 1) {
+        for y in 1..(h - 1) {
+            let mut pixels: [u8; 15] = [
+                img.get_pixel(x - 1, y - 1).0[0],
+                img.get_pixel(x - 1, y).0[0],
+                img.get_pixel(x - 1, y).0[0],
+                img.get_pixel(x - 1, y + 1).0[0],
+                img.get_pixel(x, y - 1).0[0],
+                img.get_pixel(x, y - 1).0[0],
+                img.get_pixel(x, y).0[0],
+                img.get_pixel(x, y).0[0],
+                img.get_pixel(x, y).0[0],
+                img.get_pixel(x, y - 1).0[0],
+                img.get_pixel(x, y + 1).0[0],
+                img.get_pixel(x + 1, y - 1).0[0],
+                img.get_pixel(x + 1, y).0[0],
+                img.get_pixel(x + 1, y).0[0],
+                img.get_pixel(x + 1, y + 1).0[0],
+            ];
+            pixels.sort();
+            output.put_pixel(x, y, Luma([pixels[7]]));
+        }
+    }
+    output
+}
+
+pub fn unsharp_masking(
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    mask_strength: i16,
+) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let unsharp = gaussian_smoothing(&img);
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+    for x in 0..w {
+        for y in 0..h {
+            let val = img.get_pixel(x, y).0[0] as i16 * (1 + mask_strength)
+                - (unsharp.get_pixel(x, y).0[0] as i16) * mask_strength;
+            let val = val.clamp(0, 255) as u8;
+            output.put_pixel(x, y, Luma([val]));
+        }
+    }
+    output
+}
+
+// sobel, kirsch, canny, laplace, unsharp masking
