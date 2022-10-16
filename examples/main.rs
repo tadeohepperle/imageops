@@ -24,6 +24,8 @@ type ImageOperation = fn(&DynamicImage, file_name: &str) -> (DynamicImage, Durat
 // cargo run --example main gaussian_smoothing
 // cargo run --example main median_smoothing
 // cargo run --example main weighted_median_smoothing
+// cargo run --example main unsharp_masking
+// cargo run --example main unsharp_masking_3
 
 // fn(&DynamicImage, &str) -> (DynamicImage, Duration)
 
@@ -90,6 +92,20 @@ pub fn main() {
 
     operations.insert("weighted_median_smoothing".to_owned(), |img, file_name| {
         apply_smoothing(imageops::filters::weighted_median_smoothing)(img, file_name)
+    });
+
+    operations.insert("unsharp_masking".to_owned(), |img, _file_name| {
+        let greyscale_image = img.grayscale().to_luma8();
+        let timer = Instant::now();
+        let sobel_image = filters::unsharp_masking(&greyscale_image, 1);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
+    });
+
+    operations.insert("unsharp_masking_3".to_owned(), |img, _file_name| {
+        let greyscale_image = img.grayscale().to_luma8();
+        let timer = Instant::now();
+        let sobel_image = filters::unsharp_masking(&greyscale_image, 3);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
 
     operations.insert("hist_norm_grey".to_owned(), |img, _file_name| {

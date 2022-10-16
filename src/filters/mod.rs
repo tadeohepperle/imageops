@@ -357,7 +357,6 @@ pub fn gaussian_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<L
 pub fn median_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let (w, h) = img.dimensions();
     let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
-
     for x in 1..(w - 1) {
         for y in 1..(h - 1) {
             let mut pixels: [u8; 9] = [
