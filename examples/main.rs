@@ -3,9 +3,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use image::{io::Reader as ImageReader, DynamicImage, ImageBuffer, Luma};
+use image::{io::Reader as ImageReader, DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb};
 use imageops::{
-    filters::{self, hsv_to_rgb, rgb_to_hsv, HsvImage},
+    filters::{self, gaussian_smoothing, hsv_to_rgb, rgb_to_hsv, HsvImage, KirschOperatorResult},
     measures,
 };
 
@@ -26,6 +26,9 @@ type ImageOperation = fn(&DynamicImage, file_name: &str) -> (DynamicImage, Durat
 // cargo run --example main weighted_median_smoothing
 // cargo run --example main unsharp_masking
 // cargo run --example main unsharp_masking_3
+// cargo run --example main laplace_normalized
+// cargo run --example main laplace_one_sided
+// cargo run --example main kirsch
 
 // fn(&DynamicImage, &str) -> (DynamicImage, Duration)
 
@@ -154,6 +157,18 @@ pub fn main() {
         let output = filters::contrast_enhancement(&rgb_img, 3.0);
         (output, timer.elapsed())
     });
+    operations.insert("laplace_normalized".to_owned(), |img, _file_name| {
+        let greyscale_image = img.grayscale().to_luma8();
+        let timer = Instant::now();
+        let sobel_image = filters::laplace_normalized(&greyscale_image);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
+    });
+    operations.insert("laplace_one_sided".to_owned(), |img, _file_name| {
+        let greyscale_image = img.grayscale().to_luma8();
+        let timer = Instant::now();
+        let sobel_image = filters::laplace_one_sided(&greyscale_image);
+        (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
+    });
     operations.insert("to_and_from_hsv".to_owned(), |img, _file_name| {
         let rgb_image = img.to_rgb8();
         let timer = Instant::now();
@@ -161,6 +176,64 @@ pub fn main() {
         let rgb_image_2 = hsv.to_rgb();
         (DynamicImage::ImageRgb8(rgb_image_2), timer.elapsed())
     });
+
+    operations.insert("kirsch".to_owned(), |img, _file_name| {
+        let greyscale_image = img.grayscale().to_luma8();
+        let greyscale_image = filters::average_smoothing(&greyscale_image);
+        let timer = Instant::now();
+        let KirschOperatorResult {
+            strength,
+            direction,
+        } = filters::kirsch_operator(&greyscale_image);
+
+        // show direction image:
+
+        let colors: [[u8; 3]; 8] = [
+            [255, 143, 178],
+            [235, 64, 52],
+            [222, 242, 44],
+            [72, 255, 31],
+            [31, 255, 255],
+            [45, 117, 250],
+            [141, 92, 255],
+            [236, 61, 255],
+        ];
+        let (w, h) = img.dimensions();
+        let mut colored_direction_image: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+        const THRESHHOLD: i16 = 1400;
+        for (x, y, p) in colored_direction_image.enumerate_pixels_mut() {
+            let s = strength.get_pixel(x, y).0[0];
+            let dir = direction.get_pixel(x, y).0[0];
+            let new_pix = if s >= THRESHHOLD {
+                colors[dir as usize]
+            } else {
+                [0, 0, 0]
+            };
+            *p = Rgb(new_pix);
+        }
+        colored_direction_image
+            .save(format!(
+                "examples/images/output/{}_kirsch_directions.bmp",
+                _file_name.split(".").collect::<Vec<&str>>()[0]
+            ))
+            .unwrap();
+
+        let output_grey_level_strength: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(
+            w,
+            h,
+            strength
+                .as_raw()
+                .iter()
+                .map(|e| (*e / 10).clamp(0, 255) as u8)
+                .collect(),
+        )
+        .unwrap();
+        (
+            DynamicImage::ImageLuma8(output_grey_level_strength),
+            timer.elapsed(),
+        )
+    });
+
     // operations.insert("hist_specific_grey".to_owned(), |img, file_name | {
     //     let reference_img = ImageReader::open("examples/images/reference.jpg")
     // .unwrap()

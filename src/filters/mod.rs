@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use std::cmp::{max, min};
 
-use image::{DynamicImage, ImageBuffer, Luma, Rgb};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb};
 
 pub fn sobel(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let output_sobel_x = sobel_x(&img);
@@ -354,6 +354,33 @@ pub fn gaussian_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<L
     ImageBuffer::from_raw(w, h, raw).unwrap()
 }
 
+pub fn gaussian_smoothing_5x5(
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let gauss_5x5: [[i16; 5]; 5] = [
+        [2, 4, 5, 4, 2],
+        [4, 9, 12, 9, 4],
+        [5, 12, 15, 12, 5],
+        [4, 9, 12, 9, 4],
+        [2, 4, 5, 4, 2],
+    ];
+    let gauss_5x5_sum: i32 = gauss_5x5
+        .iter()
+        .map(|e| e.iter().map(|e| *e as i32).sum::<i32>())
+        .sum();
+
+    // smoothen
+    let unsharp_img = conv_5x5_int(&img, gauss_5x5, gauss_5x5_sum);
+    let (w, h) = img.dimensions();
+
+    ImageBuffer::from_raw(
+        w,
+        h,
+        unsharp_img.as_raw().iter().map(|e| *e as u8).collect(),
+    )
+    .unwrap()
+}
+
 pub fn median_smoothing(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let (w, h) = img.dimensions();
     let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
@@ -397,6 +424,82 @@ fn conv_3x3_int(
                 + img.get_pixel(x + 1, y).0[0] as i16 * kernel[1][2]
                 + img.get_pixel(x + 1, y + 1).0[0] as i16 * kernel[2][2])
                 / divider;
+            output.put_pixel(x, y, Luma([val]));
+        }
+    }
+    output
+}
+
+fn conv_3x3_int_i16(
+    img: &ImageBuffer<Luma<i16>, Vec<i16>>,
+    kernel: [[i16; 3]; 3],
+    divider: i16,
+) -> ImageBuffer<Luma<i16>, Vec<i16>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<i16>, Vec<i16>> = ImageBuffer::new(w, h);
+
+    for x in 1..(w - 1) {
+        for y in 1..(h - 1) {
+            let val = (img.get_pixel(x - 1, y - 1).0[0] as i16 * kernel[0][0]
+                + img.get_pixel(x - 1, y).0[0] as i16 * kernel[1][0]
+                + img.get_pixel(x - 1, y + 1).0[0] as i16 * kernel[2][0]
+                + img.get_pixel(x, y - 1).0[0] as i16 * kernel[0][1]
+                + img.get_pixel(x, y).0[0] as i16 * kernel[1][1]
+                + img.get_pixel(x, y + 1).0[0] as i16 * kernel[2][1]
+                + img.get_pixel(x + 1, y - 1).0[0] as i16 * kernel[0][2]
+                + img.get_pixel(x + 1, y).0[0] as i16 * kernel[1][2]
+                + img.get_pixel(x + 1, y + 1).0[0] as i16 * kernel[2][2])
+                / divider;
+            output.put_pixel(x, y, Luma([val]));
+        }
+    }
+    output
+}
+
+fn conv_5x5_int(
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    kernel: [[i16; 5]; 5],
+    divider: i32,
+) -> ImageBuffer<Luma<i32>, Vec<i32>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<i32>, Vec<i32>> = ImageBuffer::new(w, h);
+
+    for x in 2..(w - 2) {
+        for y in 2..(h - 2) {
+            let mut val: i32 = 0;
+            for i in 0..5 {
+                for j in 0..5 {
+                    val += img.get_pixel(x - 2 + i, y - 2 + j).0[0] as i32
+                        * kernel[i as usize][j as usize] as i32
+                }
+            }
+            val /= divider;
+
+            output.put_pixel(x, y, Luma([val]));
+        }
+    }
+    output
+}
+
+fn conv_5x5_int_i16(
+    img: &ImageBuffer<Luma<i16>, Vec<i16>>,
+    kernel: [[i16; 5]; 5],
+    divider: i16,
+) -> ImageBuffer<Luma<i16>, Vec<i16>> {
+    let (w, h) = img.dimensions();
+    let mut output: ImageBuffer<Luma<i16>, Vec<i16>> = ImageBuffer::new(w, h);
+
+    for x in 2..(w - 2) {
+        for y in 2..(h - 2) {
+            let mut val: i16 = 0;
+            for i in 0..5 {
+                for j in 0..5 {
+                    val += img.get_pixel(x - 2 + i, y - 2 + j).0[0] as i16
+                        * kernel[i as usize][j as usize]
+                }
+            }
+            val /= divider;
+
             output.put_pixel(x, y, Luma([val]));
         }
     }
@@ -459,6 +562,179 @@ pub fn unsharp_masking(
         }
     }
     output
+}
+
+pub fn laplace(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<i16>, Vec<i16>> {
+    let laplace_mask = [[0, -1, 0], [-1, 4, -1], [0, -1, 0]];
+    conv_3x3_int(&img, laplace_mask, 1)
+}
+
+pub fn laplace_one_sided(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let with_laplace_mask = laplace(&gaussian_smoothing(&img));
+    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(img.width(), img.height());
+    for (x, y, p) in output.enumerate_pixels_mut() {
+        let v = with_laplace_mask.get_pixel(x, y).0[0];
+        let v = (v * 4).clamp(0, 255) as u8;
+        *p = Luma([v]);
+    }
+    output
+}
+
+pub fn laplace_normalized(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let with_laplace_mask = laplace(&gaussian_smoothing(&img));
+    let mut output: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(img.width(), img.height());
+    for (x, y, p) in output.enumerate_pixels_mut() {
+        let v = with_laplace_mask.get_pixel(x, y).0[0];
+        let v = (v * 3 + 128).clamp(0, 255) as u8;
+        *p = Luma([v]);
+    }
+    output
+}
+
+pub fn kirsch_operator(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> KirschOperatorResult {
+    let g1_kernel = [[5, 5, 5], [-3, 0, -3], [-3, -3, -3]];
+    let g1 = conv_3x3_int(img, g1_kernel, 1);
+    let g2_kernel = [[5, 5, -3], [5, 0, -3], [5, -3, -3]];
+    let g2 = conv_3x3_int(img, g2_kernel, 1);
+    let g3_kernel = [[5, -3, -3], [5, 0, -3], [5, -3, -3]];
+    let g3 = conv_3x3_int(img, g3_kernel, 1);
+    let g4_kernel = [[-3, -3, -3], [5, 0, -3], [5, 5, -3]];
+    let g4 = conv_3x3_int(img, g4_kernel, 1);
+
+    let g5_kernel = [[-3, -3, -3], [-3, 0, -3], [5, 5, 5]];
+    let g5 = conv_3x3_int(img, g5_kernel, 1);
+    let g6_kernel = [[-3, -3, -3], [-3, 0, 5], [-3, 5, 5]];
+    let g6 = conv_3x3_int(img, g6_kernel, 1);
+    let g7_kernel = [[-3, -3, 5], [-3, 0, 5], [-3, -3, 5]];
+    let g7 = conv_3x3_int(img, g7_kernel, 1);
+    let g8_kernel = [[-3, 5, 5], [-3, 0, 5], [-3, -3, -3]];
+    let g8 = conv_3x3_int(img, g8_kernel, 1);
+
+    let (w, h) = img.dimensions();
+
+    let mut strength: ImageBuffer<Luma<i16>, Vec<i16>> = ImageBuffer::new(w, h);
+    let mut direction: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+
+    let (w, h) = img.dimensions();
+    for x in 0..w {
+        for y in 0..h {
+            let g1p = g1.get_pixel(x, y).0[0];
+            let g2p = g2.get_pixel(x, y).0[0];
+            let g3p = g3.get_pixel(x, y).0[0];
+            let g4p = g4.get_pixel(x, y).0[0];
+            let g5p = g5.get_pixel(x, y).0[0];
+            let g6p = g6.get_pixel(x, y).0[0];
+            let g7p = g7.get_pixel(x, y).0[0];
+            let g8p = g8.get_pixel(x, y).0[0];
+
+            let arr = &[g1p, g2p, g3p, g4p, g5p, g6p, g7p, g8p];
+            let (i, t) = argmax_and_max(arr);
+            let m = arr.iter().max().unwrap();
+            // assert_eq!(*m, t);
+
+            strength.put_pixel(x, y, Luma([t]));
+            direction.put_pixel(x, y, Luma([i as u8]));
+        }
+    }
+
+    KirschOperatorResult {
+        strength,
+        direction,
+    }
+}
+
+fn argmax_and_max<T: Ord + Copy>(slice: &[T]) -> (usize, T) {
+    let mut max_t: Option<T> = None;
+    let mut max_pos: usize = 0;
+    for (i, t) in slice.iter().enumerate() {
+        match max_t {
+            None => max_t = Some(*t),
+            Some(e) => {
+                if *t >= e {
+                    max_t = Some(e);
+                    max_pos = i;
+                }
+            }
+        }
+    }
+    (max_pos, slice[max_pos])
+}
+
+// fn arg_max<T: Ord + Copy>(slice: &[T]) -> Option<usize> {
+//     slice
+//         .iter()
+//         .enumerate()
+//         .max_by(|(_, value0), (_, value1)| value0.cmp(value1))
+//         .map(|(idx, _)| idx)
+// }
+
+// fn argmax_and_max<T: Ord + Copy>(slice: &[T]) -> (usize, T) {
+//     let i = arg_max(slice).unwrap();
+//     (i, slice[i])
+// }
+
+#[cfg(test)]
+mod test {
+    use super::argmax_and_max;
+
+    #[test]
+    fn test_argmax() {
+        let arr = [1, 2, 3, 6, 4, 0, -4];
+        let (i, e) = argmax_and_max(&arr);
+        assert_eq!((3, 6), (i, e))
+    }
+}
+
+pub struct KirschOperatorResult {
+    pub strength: ImageBuffer<Luma<i16>, Vec<i16>>,
+    pub direction: ImageBuffer<Luma<u8>, Vec<u8>>,
+}
+
+pub fn canny_edge_detector(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let gauss_5x5: [[i16; 5]; 5] = [
+        [2, 4, 5, 4, 2],
+        [4, 9, 12, 9, 4],
+        [5, 12, 15, 12, 5],
+        [4, 9, 12, 9, 4],
+        [2, 4, 5, 4, 2],
+    ];
+    let gauss_5x5_sum: i32 = gauss_5x5
+        .iter()
+        .map(|e| e.iter().map(|e| *e as i32).sum::<i32>())
+        .sum();
+
+    // smoothen
+    let unsharp_img = conv_5x5_int(&img, gauss_5x5, gauss_5x5_sum)
+        .as_raw()
+        .iter()
+        .map(|e| *e as i16)
+        .collect::<Vec<i16>>();
+    let unsharp_img: ImageBuffer<Luma<i16>, Vec<i16>> =
+        ImageBuffer::from_raw(w, h, unsharp_img).unwrap();
+
+    // get edge image:
+    let laplace_mask = [[0, -1, 0], [-1, 4, -1], [0, -1, -1]];
+    let laplace_img_i16 = conv_3x3_int_i16(&unsharp_img, laplace_mask, 1);
+
+    let mut laplace_img: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+    for (x, y, p) in laplace_img.enumerate_pixels_mut() {
+        let v = laplace_img_i16.get_pixel(x, y).0[0];
+        let v = (v * 3).clamp(0, 255) as u8;
+        *p = Luma([v]);
+    }
+    // do non-maximum supression
+
+    // double threshholding
+
+    todo!();
+}
+
+fn non_maximum_suppression(
+    edge_strengths: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    edge_directions: &ImageBuffer<Luma<u8>, Vec<u8>>,
+) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    todo!()
 }
 
 // sobel, kirsch, canny, laplace, unsharp masking
