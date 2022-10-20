@@ -25,7 +25,7 @@ type ImageOperation = fn(&DynamicImage, file_name: &str) -> (DynamicImage, Durat
 // cargo run --example main median_smoothing
 // cargo run --example main weighted_median_smoothing
 // cargo run --example main unsharp_masking
-// cargo run --example main unsharp_masking_3
+// cargo run --example main unsharp_masking_10
 // cargo run --example main laplace_normalized
 // cargo run --example main laplace_one_sided
 // cargo run --example main kirsch
@@ -104,10 +104,10 @@ pub fn main() {
         (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
 
-    operations.insert("unsharp_masking_3".to_owned(), |img, _file_name| {
+    operations.insert("unsharp_masking_10".to_owned(), |img, _file_name| {
         let greyscale_image = img.grayscale().to_luma8();
         let timer = Instant::now();
-        let sobel_image = filters::unsharp_masking(&greyscale_image, 3);
+        let sobel_image = filters::unsharp_masking(&greyscale_image, 10);
         (DynamicImage::ImageLuma8(sobel_image), timer.elapsed())
     });
 
@@ -200,7 +200,7 @@ pub fn main() {
         ];
         let (w, h) = img.dimensions();
         let mut colored_direction_image: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(w, h);
-        const THRESHHOLD: i16 = 1400;
+        const THRESHHOLD: i16 = 300;
         for (x, y, p) in colored_direction_image.enumerate_pixels_mut() {
             let s = strength.get_pixel(x, y).0[0];
             let dir = direction.get_pixel(x, y).0[0];

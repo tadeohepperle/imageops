@@ -601,15 +601,6 @@ pub fn kirsch_operator(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> KirschOperatorRe
     let g4_kernel = [[-3, -3, -3], [5, 0, -3], [5, 5, -3]];
     let g4 = conv_3x3_int(img, g4_kernel, 1);
 
-    let g5_kernel = [[-3, -3, -3], [-3, 0, -3], [5, 5, 5]];
-    let g5 = conv_3x3_int(img, g5_kernel, 1);
-    let g6_kernel = [[-3, -3, -3], [-3, 0, 5], [-3, 5, 5]];
-    let g6 = conv_3x3_int(img, g6_kernel, 1);
-    let g7_kernel = [[-3, -3, 5], [-3, 0, 5], [-3, -3, 5]];
-    let g7 = conv_3x3_int(img, g7_kernel, 1);
-    let g8_kernel = [[-3, 5, 5], [-3, 0, 5], [-3, -3, -3]];
-    let g8 = conv_3x3_int(img, g8_kernel, 1);
-
     let (w, h) = img.dimensions();
 
     let mut strength: ImageBuffer<Luma<i16>, Vec<i16>> = ImageBuffer::new(w, h);
@@ -622,16 +613,9 @@ pub fn kirsch_operator(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> KirschOperatorRe
             let g2p = g2.get_pixel(x, y).0[0];
             let g3p = g3.get_pixel(x, y).0[0];
             let g4p = g4.get_pixel(x, y).0[0];
-            let g5p = g5.get_pixel(x, y).0[0];
-            let g6p = g6.get_pixel(x, y).0[0];
-            let g7p = g7.get_pixel(x, y).0[0];
-            let g8p = g8.get_pixel(x, y).0[0];
 
-            let arr = &[g1p, g2p, g3p, g4p, g5p, g6p, g7p, g8p];
+            let arr = &[g1p, g2p, g3p, g4p, -g1p, -g2p, -g3p, -g4p];
             let (i, t) = argmax_and_max(arr);
-            let m = arr.iter().max().unwrap();
-            // assert_eq!(*m, t);
-
             strength.put_pixel(x, y, Luma([t]));
             direction.put_pixel(x, y, Luma([i as u8]));
         }
@@ -724,10 +708,10 @@ pub fn canny_edge_detector(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<
         *p = Luma([v]);
     }
     // do non-maximum supression
-
-    // double threshholding
-
     todo!();
+    // double threshholding
+    todo!();
+    // hysterisis tracing
 }
 
 fn non_maximum_suppression(
